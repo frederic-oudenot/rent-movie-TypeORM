@@ -27,6 +27,22 @@ export class RentalService {
     return results;
   }
 
+  // Get all data between two dates with relations
+  async findRentalByStartAndEndTime(
+    startTime: Date,
+    endTime: Date,
+  ): Promise<Rental[]> {
+    const results = await this.rentalRepository
+      .createQueryBuilder('rental')
+      .innerJoinAndSelect('rental.inventory', 'inventory')
+      .innerJoinAndSelect('rental.customer', 'customer')
+      .innerJoinAndSelect('inventory.film', 'film')
+      .where(`return_date >= :startTime`, { startTime })
+      .andWhere(`return_date < :endTime`, { endTime })
+      .getMany();
+    return results;
+  }
+
   // Create one rental data
   async Create(data: RentalaAttributesDB): Promise<ObjectLiteral> {
     const results = await this.rentalRepository

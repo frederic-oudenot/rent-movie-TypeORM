@@ -32,7 +32,7 @@ export class Customer {
   @Column({
     type: 'varchar',
     length: 50,
-    nullable: true,
+    unique: true,
   })
   email: string;
 

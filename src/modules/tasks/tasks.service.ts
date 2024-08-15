@@ -3,6 +3,7 @@ import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 import { RentalService } from '../rental/rental.service';
 import { CustomerService } from '../customer/customer.service';
 import setDatesReminder from 'src/services/setDatesReminder';
+import { Rental } from '../rental/entity/rental.entity';
 
 @Injectable()
 export class TasksService {
@@ -60,12 +61,17 @@ export class TasksService {
     return loggerCron;
   }
 
-  // Cron schedule : Every day at noon, reminder to all customers if rental(s) were d-5
+  // Cron schedule : Every day at noon, reminder to all customers if rental(s) were d-3
   // Logger into terminal to check
   @Cron(CronExpression.EVERY_DAY_AT_NOON, {
-    name: 'notifications day d-5',
+    name: 'notifications',
     timeZone: 'Europe/Paris',
   })
+  async initFunction() {
+    await this.sendingMailReminderDayMinusFive();
+    await this.sendingMailReminderDayMinusThree();
+  }
+
   //Function : sending a mail reminder D-5
   async sendingMailReminderDayMinusFive() {
     try {
@@ -75,42 +81,20 @@ export class TasksService {
       const endReminderTime = setDatesReminder(this.endDate, 5);
 
       // Get all rental information
-      const result = await this.rentalRepository.findAll();
+      const result = await this.rentalRepository.findRentalByStartAndEndTime(
+        startReminderTime,
+        endReminderTime,
+      );
 
-      //Check each rental data
-      result.forEach(async (rental) => {
-        // Condition to not check return date null
-        if (rental.return_date != null) {
-          // Set date format
-          const returnDate = new Date(rental.return_date);
+      //sending Mail to customer
+      this.sendingMail(result, 5);
 
-          // Condition return date between start and end reminder
-          if (returnDate > startReminderTime && returnDate <= endReminderTime) {
-            // Get customer information according rental_id
-            const customerResult = await this.customerRepository.findOne(
-              rental.customer_id,
-            );
-            // Create a log to simulate a sending mail
-            this.logger.log(
-              `Mailto : ${customerResult.email}
-              Bonjour ${customerResult.first_name} ${customerResult.last_name}, nous vous informons que votre location : ${rental.inventory.film.title} doit être retourné dans les 5 jours restants.`,
-            );
-          }
-        }
-      });
       // return a succeful message
       return { result: 'Reminder done d-5!' };
     } catch (error) {
       console.error(error);
     }
   }
-
-  // Cron schedule : Every day at noon, reminder to all customers if rental(s) were d-3
-  // Logger into terminal to check
-  @Cron(CronExpression.EVERY_DAY_AT_NOON, {
-    name: 'notifications day d-3',
-    timeZone: 'Europe/Paris',
-  })
   //Function : sending a mail reminder D-3
   async sendingMailReminderDayMinusThree() {
     try {
@@ -120,34 +104,33 @@ export class TasksService {
       const endReminderTime = setDatesReminder(this.endDate, 3);
 
       // Get all rental information
-      const result = await this.rentalRepository.findAll();
+      const result = await this.rentalRepository.findRentalByStartAndEndTime(
+        startReminderTime,
+        endReminderTime,
+      );
 
-      //Check each rental data
-      result.forEach(async (rental) => {
-        // Condition to not check return date null
-        if (rental.return_date != null) {
-          // Set date format
-          const returnDate = new Date(rental.return_date);
+      //sending Mail to customer
+      this.sendingMail(result, 3);
 
-          // Condition return date between start and end reminder
-          if (returnDate > startReminderTime && returnDate <= endReminderTime) {
-            // Get customer information according rental_id
-            const customerResult = await this.customerRepository.findOne(
-              rental.customer_id,
-            );
-
-            // Create a log to simulate a sending mail
-            this.logger.log(
-              `Mailto : ${customerResult.email}
-              Bonjour ${customerResult.first_name} ${customerResult.last_name}, nous vous informons que votre location : ${rental.inventory.film.title} doit être retourné dans les 3 jours restants.`,
-            );
-          }
-        }
-      });
       // return a succeful message
       return { result: 'Reminder done : d-3!' };
     } catch (error) {
       console.error(error);
     }
+  }
+
+  // Function sending mail
+  sendingMail(data: Rental[], day: number) {
+    data.forEach(async (rental) => {
+      // Get customer information according rental_id
+      const customerResult = await this.customerRepository.findOne(
+        rental.customer_id,
+      );
+      // Create a log to simulate a sending mail
+      this.logger.log(
+        `Mailto : ${customerResult.email}
+                Bonjour ${customerResult.first_name} ${customerResult.last_name}, nous vous informons que votre location : ${rental.inventory.film.title} doit être retourné dans les ${day} jours restants.`,
+      );
+    });
   }
 }
